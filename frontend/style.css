@@ -1,0 +1,53 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #333;
+  }
+  .table-container {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 45%;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+  }
+  th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+  }
+  .table-title {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #555;
+  }
+
+  /* Estilo general para el párrafo que indica el estado del nodo */
+.leader-status {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    margin-top: 20px;
+  }
+  
+  /* Si el nodo es jefe, color verde */
+  .leader-status.green {
+    color: green;
+  }
+  
+  /* Si el nodo no es jefe, color rojo */
+  .leader-status.red {
+    color: red;
+  }
+  

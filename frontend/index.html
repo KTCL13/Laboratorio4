@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Servidor: {{ serverInfo }}</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.min.js"></script>
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <h1>Servidor: {{ serverInfo }}</h1>
+
+    <p :class="['leader-status', isLeader ? 'green' : 'red']">
+      {{ isLeader ? 'Este nodo es el Jefe' : 'Este nodo no es el Jefe' }}
+    </p>
+    
+
+    <div class="table-container">
+      <div>
+        <div class="table-title">HealthChecks al lider</div>
+        <table>
+          <thead>
+              <tr>
+                  <th>Logs</th>
+              </tr>
+          </thead>
+          <tbody>
+              <tr>
+                  <td>log</td>
+              </tr>
+          </tbody>
+      </table>
+      </div>
+      
+      <div class="table-container">
+        <div>
+          <div class="table-title">Proceso de seleccion</div>
+          <table>
+            <thead>
+                <tr>
+                    <th>Logs</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>log</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
