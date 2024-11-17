@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
+const process = require('process');
 
 
 const app = express();
@@ -13,6 +14,7 @@ const hostPort = process.env.HOST_PORT || 3000;
 const ipAddress = process.env.IP_ADDRESS || "localhost"; 
 const containerName = process.env.CONTAINER_NAME;
 const disServerip= process.env.DIS_SERVERIP_PORT || "192.168.178.54:9000"
+const IDNode = process.env.IDNODE
 
 
 app.use(express.static(path.join(__dirname, 'frontend')));
@@ -46,7 +48,7 @@ const startServer = async () => {
       const requestOptions = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ipAddress: ipAddress, port: hostPort , id: containerName }),
+        body: JSON.stringify({ ipAddress: ipAddress, port: hostPort , id: containerName , IDNode:IDNode }),
       };
   
      const response = await fetch(`http://${disServerip}/discoveryserver`, requestOptions)
