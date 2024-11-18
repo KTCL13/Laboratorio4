@@ -56,6 +56,60 @@ const startServer = async () => {
       console.error('Error al obtener la IP:', error);
     }
 };
+// Función para iniciar una elección
+function startElection() {
+  console.log(`Iniciando elección desde el nodo ${IDNode}`);
+  const higherNodes = nodes.filter(node => node.id > IDNode && node.active);
+
+  if (higherNodes.length === 0) {
+      declareLeader();
+  } else {
+      let responses = 0;
+      higherNodes.forEach(node => {
+        console.log(`Nodo ${IDNode} envía mensaje de elección a Nodo ${node.id}`);
+        io.emit("election", { from: IDNode, to: node.id });
+    });
+    
+    // Escuchar respuestas de elección globalmente
+    io.on("electionResponse", (msg) => {
+        if (msg.to === IDNode) {
+            responses++;
+            console.log(`Nodo ${msg.from} responde a la elección.`);
+    
+            if (responses >= nodes.filter(node => node.id > IDNode && node.active).length) {
+                declareLeader();
+            }
+        }
+    });    
+  }
+}
+// Función para declarar al líder
+function declareLeader() {
+  leader = IDNode;
+  console.log(`Nodo ${IDNode} se declara como líder`);
+  io.emit("newLeader", { leader: leader });
+}
+
+// Función para manejar notificación de nuevo líder
+io.on("newLeader", (msg) => {
+  leader = msg.leader;
+  console.log(`El nuevo líder es el nodo ${leader}`);
+});
+// Función para realizar un health check al líder
+function performHealthCheck() {
+  if (leader !== null && leader !== IDNode) {
+      console.log(`Verificando estado del líder ${leader}`);
+      const isLeaderAlive = Math.random() > 0.2; // Simulación
+
+      if (!isLeaderAlive) {
+          console.log(`Líder ${leader} no responde, iniciando elección`);
+          startElection();
+      }
+  } else if (leader === null) {
+      console.log("No hay líder, iniciando elección.");
+      startElection();
+  }
+} 
   
 server.listen(containerPort, startServer);
   
