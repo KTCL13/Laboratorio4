@@ -20,7 +20,7 @@ const healthCheckInverval =  Math.random() * 5000 + 5000
 const logs=[]
 let leader = null;  // Variable para el líder
 let leaderStatus = false;
-let NODES = [{id:1 , address:"localhost:3000"}, {id:2 , address:"localhost:3001"},{id:3 , address:"localhost:3002"}];
+let NODES = [];
 let inElection = false
 
 const serverProperties= {
@@ -29,11 +29,30 @@ const serverProperties= {
     get leaderStatus() { return leaderStatus; }
 }
 
+
+
 app.use(express.json())
 app.use(express.static(path.join(__dirname, 'frontend')));
 
+
+function formatDate () {
+    const date = new Date();
+  
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); 
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+
+    return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}:${milliseconds}`;
+  };
+  
+  
+
 function createLog(message){
-    const log = new Date().toISOString() +" "+ message
+    const log = formatDate() +" "+ message
     console.log(log)
     logs.push(log)
     io.emit("update", { serverProperties: serverProperties })

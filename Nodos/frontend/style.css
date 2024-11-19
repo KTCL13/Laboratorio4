@@ -1,30 +1,41 @@
-body {
+  body {
     font-family: Arial, sans-serif;
-    margin: 20px;
+    margin: 0; /* Elimina márgenes globales */
+    padding: 0;
   }
+
   h1 {
     text-align: center;
     color: #333;
   }
+
   .table-container {
     display: flex;
-    justify-content: space-around;
-    margin-top: 20px;
+    justify-content: center; /* Centra horizontalmente */
+    align-items: center; /* Centra verticalmente si es necesario */
+    width: 100%; /* Asegura que el contenedor ocupe todo el ancho */
+    margin: 20px 0;
+    padding: 0;
   }
+
   table {
     border-collapse: collapse;
-    width: 45%;
+    width: 50%; /* Ajusta el ancho de la tabla */
+    max-width: 100%;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   }
+
   th, td {
     border: 1px solid #ddd;
-    padding: 10px;
-    text-align: left;
+    padding: 8px;
+    text-align: center;
   }
+
   th {
     background-color: #f4f4f4;
     font-weight: bold;
   }
+
   .table-title {
     text-align: center;
     margin-bottom: 10px;
@@ -33,21 +44,23 @@ body {
     color: #555;
   }
 
-  /* Estilo general para el párrafo que indica el estado del nodo */
-.leader-status {
+  .leader-status {
     text-align: center;
     font-size: 18px;
     font-weight: bold;
     margin-top: 20px;
   }
-  
-  /* Si el nodo es jefe, color verde */
+
   .leader-status.green {
     color: green;
   }
-  
-  /* Si el nodo no es jefe, color rojo */
+
   .leader-status.red {
     color: red;
   }
-  
+
+  .healthcheck-message {
+    margin-top: 20px;
+    font-size: 1.2em;
+    color: #333;
+  }

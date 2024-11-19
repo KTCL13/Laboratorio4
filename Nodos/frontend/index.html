@@ -16,10 +16,9 @@
       {{ serverProperties.leaderStatus  ? 'Este nodo es el Jefe' : 'Este nodo no es el Jefe' }}
     </p>
     
+    <p class="healthcheck-message"> Enviando HealthChecks al lider cada: {{ (serverProperties.healthCheckInverval / 1000).toFixed(1) }} s </p>
 
     <div class="table-container">
-      <div>
-        <div class="table-title">Logs</div>
         <table>
           <thead>
               <tr>
@@ -34,8 +33,6 @@
           </tbody>
       </table>
       </div>
-
-  <p> Enviando HealthChecks al lider cada: {{ (serverProperties.healthCheckInverval / 1000).toFixed(1) }} s </p>
 
   <script src="script.js"></script>
 </body>
