@@ -12,14 +12,14 @@
   <div id="app">
     <h1>Servidor: {{ serverInfo }}</h1>
 
-    <p :class="['leader-status', isLeader ? 'green' : 'red']">
-      {{ isLeader ? 'Este nodo es el Jefe' : 'Este nodo no es el Jefe' }}
+    <p :class="['leader-status', serverProperties.leaderStatus ? 'green' : 'red']">
+      {{ serverProperties.leaderStatus  ? 'Este nodo es el Jefe' : 'Este nodo no es el Jefe' }}
     </p>
     
 
     <div class="table-container">
       <div>
-        <div class="table-title">HealthChecks al lider</div>
+        <div class="table-title">Logs</div>
         <table>
           <thead>
               <tr>
@@ -27,32 +27,16 @@
               </tr>
           </thead>
           <tbody>
-              <tr>
-                  <td>log</td>
+              <tr v-for="(log, index) in serverProperties.logs"
+              :key="index">
+                  <td>{{log}}</td>
               </tr>
           </tbody>
       </table>
       </div>
-      
-      <div class="table-container">
-        <div>
-          <div class="table-title">Proceso de seleccion</div>
-          <table>
-            <thead>
-                <tr>
-                    <th>Logs</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>log</td>
-                </tr>
-            </tbody>
-        </table>
-        </div>
-      </div>
-    </div>
-  </div>
+
+  <p> Enviando HealthChecks al lider cada: {{ (serverProperties.healthCheckInverval / 1000).toFixed(1) }} s </p>
+
   <script src="script.js"></script>
 </body>
 </html>
