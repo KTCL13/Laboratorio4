@@ -14,11 +14,11 @@ app.use(cors());
 app.use(express.json());
 
 // Puerto del servidor
-const port = 3000;
+const port = 9000;
 
 // Almacenamiento en memoria para nodos
 const nodes = [];
-const connections = [];
+
 
 // Configuración SSH
 const sshConfig = {
@@ -28,6 +28,8 @@ const sshConfig = {
   password: process.env.SSH_PASSWORD,
 };
 
+let leader= null;
+
 let portsData = { hostPort: 3000, containerPort: 3000 };
 
 // --- Endpoints ---
@@ -36,33 +38,14 @@ let portsData = { hostPort: 3000, containerPort: 3000 };
 app.post('/register', async (req, res) => {
     console.log('Nuevo servidor:', req.body);
     const node = req.body;
-  
-    // Verificar duplicados
-    if (!nodes.some(n => n.id === node.id)) {
-      try {
-        nodes.push(node);
-        console.log(`Nodo registrado: ${node.id}`);
-        
-        // Propagar a todos los nodos la lista actualizada
-        io.emit('updateNodes', { nodes });
-        
-        // Evaluar si debe iniciar una elección
-        const leaderNode = nodes.find(n => n.leader);
-        if (!leaderNode || node.id > leaderNode.id) {
-          console.log(`Iniciando elección de líder desde nodo ${node.id}`);
-          io.emit('startElection', { initiator: node.id });
-        }
-  
-        res.status(201).send({ message: 'Nodo registrado y propagado exitosamente.' });
-      } catch (error) {
-        console.error('Error al registrar nodo:', error);
-        res.status(500).send({ error: 'Error interno al registrar nodo.' });
-      }
-    } else {
-      console.log('Nodo duplicado.');
-      res.status(409).send({ error: 'Nodo duplicado.' });
-    }
+    nodes.push(node);
+    console.log(`Nodo registrado: ${node.IDNode}`);
+    io.emit('updateNodes', nodes );
+    res.status(200).send('ok');
   });
+
+
+
 
 // Endpoint para crear un nuevo nodo mediante Docker
 app.post('/run-docker', (req, res) => {
@@ -73,14 +56,22 @@ app.post('/run-docker', (req, res) => {
     return res.status(400).send({ error: 'IDnode es obligatorio.' });
   }
 
-  runContainer(IDnode, (err, result) => {
-    if (err) {
-      console.error('Error al crear contenedor:', err.message);
-      return res.status(500).send({ error: `Error: ${err.message}` });
-    }
-    console.log(`Contenedor creado: ${result}`);
-    res.status(201).send({ message: `Contenedor creado: ${result}` });
-  });
+  if (!nodes.some(n => n.IDnode === IDnode)) {
+   
+    runContainer(IDnode, (err, result) => {
+      if (err) {
+        console.error('Error al crear contenedor:', err.message);
+        return res.status(500).send({ error: `Error: ${err.message}` });
+      }
+      console.log(`Contenedor creado: ${result}`);
+      res.status(201).send({ message: `Contenedor creado: ${result}` });
+    });
+   
+  } else {
+    console.log('Nodo duplicado.');
+    res.status(409).send({ error: 'Nodo duplicado.' });
+  }
+
 });
 
 // Endpoint para detener un nodo aleatorio
@@ -126,6 +117,7 @@ function runContainer(IDnode, callback) {
     docker build -t my-node-app . && \
     docker run --rm --name ${uniqueContainerName} \
     -e IDNODE=${IDnode} \
+    -e LEADER=${leader}
     -e CONTAINER_NAME=${uniqueContainerName} \
     -e HOST_PORT=${hostPort} \
     -e CONTAINER_PORT=${containerPort} \
@@ -167,9 +159,9 @@ function executeSSHCommand(command, callback) {
 io.on('connection', (socket) => {
   console.log('Nueva conexión WebSocket establecida.');
 
-  socket.on('register', (data) => {
-    console.log(`Nodo conectado por WebSocket: ${data.id}`);
-    connections.push({ id: data.id, socketId: socket.id });
+  socket.on('newLeader', (data) => {
+    console.log(`Nuevo lider: ${data}`);
+    leader=data;
   });
 
   socket.on('disconnect', () => {
