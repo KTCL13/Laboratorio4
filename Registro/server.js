@@ -126,6 +126,12 @@ function runContainer(IDnode, callback) {
     -p ${hostPort}:${containerPort} my-node-app
   `;
 
+
+
+//docker run --rm --name node3 -e IDNODE=3 -e LEADER=1 -e CONTAINER_NAME="node3" -e HOST_PORT=3002 -e CONTAINER_PORT=3002 -e DIS_SERVERIP_PORT="192.168.1.7:9000" -e IP_ADDRESS="192.168.1.7" -p 3002:3002 my-node-app;
+
+
+
   executeSSHCommand(command, callback);
 }
 
