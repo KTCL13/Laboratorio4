@@ -48,7 +48,11 @@ app.post('/run-docker', (req, res) => {
     if (!IDnode) {
         return res.status(400).send("IDnode es obligatorio.");
     }
-
+    
+    if (isNaN(IDnode)) {
+        return res.status(400).send("IDnode debe ser un número.");
+    }
+    
     runContainer(IDnode,(err, result) => {
         if (err) {
             return res.status(500).send(`Error: ${err.message}`);
