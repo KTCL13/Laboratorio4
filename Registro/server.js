@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const axios = require('axios');
 const { Client } = require('ssh2');
+const { io: clientIo } = require('socket.io-client');
 
 // Configuración inicial
 const app = express();
@@ -22,7 +23,7 @@ app.use(express.json());
 // Puerto del servidor
 const port = 9000;
 
-// Almacenamiento en memoria para nodos
+// Almacén de nodos
 const nodes = [];
 const nodesInformation = {}
 
@@ -34,26 +35,43 @@ const sshConfig = {
   password: process.env.SSH_PASSWORD,
 };
 
-let leader= null;
+// Validación de variables de entorno
+if (!sshConfig.host || !sshConfig.username || !sshConfig.password) {
+  console.error('Error: Faltan variables de entorno para SSH.');
+  process.exit(1);
+}
 
+// Variables globales
+let leader = null;
 let portsData = { hostPort: 3000, containerPort: 3000 };
 
 // --- Endpoints ---
 
 // Registro de un nuevo nodo
-app.post('/register', async (req, res) => {
-    console.log('Nuevo servidor:', req.body);
-    const node = req.body;
-    nodes.push(node);
-    console.log(`Nodo registrado: ${node.IDNode}`);
-    io.emit('updateNodes', nodes );
-    res.status(200).send('ok');
-  });
+app.post('/register', (req, res) => {
+  const { IDnode } = req.body;
 
+  if (!IDnode) {
+    return res.status(400).send({ error: 'El campo IDnode es obligatorio.' });
+  }
 
+  if (nodes.some(n => n.IDnode === IDnode)) {
+    return res.status(409).send({ error: 'Nodo duplicado.' });
+  }
 
+  nodes.push({ IDnode });
+  console.log(`Nodo registrado: ${IDnode}`);
+  io.emit('updateNodes', nodes); // Enviar actualización de nodos al frontend
+  res.status(200).send({ message: 'Nodo registrado correctamente.' });
+});
 
-// Endpoint para crear un nuevo nodo mediante Docker
+// Obtener nodos
+app.get('/nodes', (req, res) => {
+  console.log('Obteniendo información de los nodos.');
+  res.status(200).send({ nodes });
+});
+
+// Crear un nodo mediante Docker
 app.post('/run-docker', (req, res) => {
     console.log("/run-docker: iniciando una nueva instancia")
     const {IDnode} = req.body
@@ -66,22 +84,20 @@ app.post('/run-docker', (req, res) => {
         return res.status(400).send("IDnode debe ser un número.");
     }
 
-  if (!nodes.some(n => n.IDnode === IDnode)) {
-   
-    runContainer(IDnode, (err, result) => {
-      if (err) {
-        console.error('Error al crear contenedor:', err.message);
-        return res.status(500).send({ error: `Error: ${err.message}` });
-      }
-      console.log(`Contenedor creado: ${result}`);
-      res.status(201).send({ message: `Contenedor creado: ${result}` });
-    });
-   
-  } else {
-    console.log('Nodo duplicado.');
-    res.status(409).send({ error: 'Nodo duplicado.' });
+  if (nodes.some(n => n.IDnode === IDnode)) {
+    return res.status(409).send({ error: 'Nodo duplicado.' });
   }
 
+  runContainer(IDnode, (err, result) => {
+    if (err) {
+      console.error('Error al crear contenedor:', err.message);
+      return res.status(500).send({ error: `Error: ${err.message}` });
+    }
+
+    nodes.push({ IDnode });
+    console.log(`Contenedor creado: ${result}`);
+    res.status(201).send({ message: `Contenedor creado: ${result}` });
+  });
 });
 
 app.get('/nodes', (req, res) => {
@@ -124,14 +140,17 @@ function stopContainerById(containerId, callback) {
 }
 
 function runContainer(IDnode, callback) {
-  console.log(new Date(), 'Creando servidor');
   const directory = process.env.DOCKER_DIRECTORY;
+
+  if (!directory || !process.env.DISCOVERY_SERVER) {
+    return callback(new Error('Faltan variables de entorno para Docker.'));
+  }
+
   portsData.hostPort += 1;
   portsData.containerPort += 1;
+
   const hostPort = portsData.hostPort;
   const containerPort = portsData.containerPort;
-  const discoveryServer = process.env.DISCOVERY_SERVER;
-  const ipAddress = process.env.SSH_HOST;
   const uniqueContainerName = `my-node-app-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const command = `
     cd ${directory} && \
@@ -142,8 +161,6 @@ function runContainer(IDnode, callback) {
     -e CONTAINER_NAME=${uniqueContainerName} \
     -e HOST_PORT=${hostPort} \
     -e CONTAINER_PORT=${containerPort} \
-    -e DIS_SERVERIP_PORT=${discoveryServer} \
-    -e IP_ADDRESS=${ipAddress} \
     -p ${hostPort}:${containerPort} my-node-app
   `;
 
@@ -173,6 +190,8 @@ function executeSSHCommand(command, callback) {
         callback(null, outputData.trim());
       });
     });
+  }).on('error', (err) => {
+    callback(err);
   }).connect(sshConfig);
 }
 
@@ -234,5 +253,5 @@ setInterval(() => {
 
 // --- Inicializar servidor ---
 server.listen(port, () => {
-  console.log(`Monitor corriendo en el puerto: ${port}`);
+  console.log(`Servidor monitor corriendo en el puerto: ${port}`);
 });
