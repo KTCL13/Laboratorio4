@@ -3,22 +3,24 @@ const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
 const process = require('process');
+const { io } = require("socket.io-client"); 
+
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const ioserver = new Server(server);
 
-const containerPort = process.env.CONTAINER_PORT || 3002;
+const containerPort = process.env.CONTAINER_PORT || 3000;
 const hostPort = process.env.HOST_PORT || 3000;
 const ipAddress = process.env.IP_ADDRESS || "localhost"; 
 const containerName = process.env.CONTAINER_NAME;
-const disServerip= process.env.DIS_SERVERIP_PORT || "192.168.178.54:9000"
-const IDNode = process.env.IDNODE || 3;
-
+const disServerip= process.env.DIS_SERVERIP_PORT || "localhost:9000"
+const IDNode = process.env.IDNODE || 1;
+const socket = io(`http://${disServerip}`);
 const healthCheckInverval =  Math.random() * 5000 + 5000
 
 const logs=[]
-let leader = null;  // Variable para el líder
+let leader = process.env.LEADER 
 let leaderStatus = false;
 let NODES = [];
 let inElection = false
@@ -55,13 +57,23 @@ function createLog(message){
     const log = formatDate() +" "+ message
     console.log(log)
     logs.push(log)
-    io.emit("update", { serverProperties: serverProperties })
+    ioserver.emit("update", { serverProperties: serverProperties })
 }
 
-io.on("connection", (socket) => {
+ioserver.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
-    io.emit("update", { serverProperties: serverProperties })
+    ioserver.emit("update", { serverProperties: serverProperties })
+
 });
+
+
+
+socket.on("updateNodes", (data) => {
+    console.log("Mensaje recibido por WebSocket:", data);
+    NODES = data; 
+    console.log("nodes actuales:" + NODES)
+});
+
 
 // Ruta principal que devuelve el archivo HTML
 app.get('/', (req, res) => {
@@ -71,10 +83,13 @@ app.get('/', (req, res) => {
 
 
 app.get("/healthCheck", (req, res) => {
+    createLog(`URL: ${req.url} - method:${req.method} - from:${req.ip}`)
     res.status(200).send("ok");
 });
 
 async function performHealthCheck() {
+
+    console.log(leader)
     if(inElection||leaderStatus){
         return;
     }
@@ -85,7 +100,7 @@ async function performHealthCheck() {
         return;
     }
 
-    const leaderNode = NODES.find(node => node.id === leader);
+    const leaderNode = NODES.find(node => node.IDNode === leader);
     if (!leaderNode) {
         console.log(`El líder ${leader} no está en la lista de nodos.`);
         startElection();
@@ -94,11 +109,11 @@ async function performHealthCheck() {
 
     try {
         console.log(`Nodo ${IDNode} verificando estado del líder ${leader}.`);
-        const response = await fetch(`http://${leaderNode.address}/healthCheck`);
+        const response = await fetch(`http://${leaderNode.ipAddress}/healthCheck`);
         createLog(`${response.url} - method:GET - req.body:{from: ${IDNode}} status:${response.status}`)
         if (!response.ok) throw new Error("Líder no responde");
     } catch (error) {
-        createLog(`URL: http://${leaderNode.address}/healthCheck - method:GET - error:${error.message}`)
+        createLog(`URL: http://${leaderNode.ipAddress}/healthCheck - method:GET - error:${error.message}`)
         startElection();
     }
 }
@@ -115,7 +130,9 @@ app.post('/newLeader', (req, res) => {
     inElection = false
     const { newLeader } = req.body;
     leader = newLeader
-    leaderStatus = false
+    if(leader !== IDNode){
+        leaderStatus = false
+    }
     res.status(200).send("Leader changed");
 });
 
@@ -125,17 +142,17 @@ async function startElection() {
   inElection = true  
   console.log(`Nodo ${IDNode} iniciando elección.`);
   
-  const higherNodes = NODES.filter(node => node.id > IDNode);
+  const higherNodes = NODES.filter(node => node.IDNode > IDNode);
 
   if (higherNodes.length === 0) {
       declareLeader();
   } else {
       let resolvedResponses = 0;
-      let unresolvedNodes = new Set(higherNodes.map(node => node.id));
+      let unresolvedNodes = new Set(higherNodes.map(node => node.IDNode));
 
       for (const node of higherNodes) {
           try {
-                const response = await fetch(`http://${node.address}/election`, {
+                const response = await fetch(`http://${node.ipAddress}/election`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ from: IDNode }),
@@ -143,10 +160,10 @@ async function startElection() {
               createLog(`${response.url} - method:POST - req.body:{from: ${IDNode}} status:${response.status} statusText:${response.statusText}`)
               if (response.ok) {
                   resolvedResponses++;
-                  unresolvedNodes.delete(node.id);
+                  unresolvedNodes.delete(node.IDNode);
               }
           } catch (error) {0
-            createLog(`URL: http://${node.address}/election - method:POST - error:${error.message}`)
+            createLog(`URL: http://${node.ipAddress}/election - method:POST - error:${error.message}`)
           }
       }
 
@@ -157,18 +174,6 @@ async function startElection() {
           declareLeader();
       } else {
           console.log(`Nodo ${IDNode} no se declara líder, esperando confirmación de nodos con ID más alto.`);
-      }
-  }
-}
-
-async function updateActiveNodes() {
-  for (const node of NODES) {
-      try {
-          const response = await fetch(`${node.address}/healthCheck`, { method: "GET" });
-          node.active = response.ok;
-      } catch (error) {
-          node.active = false;
-          console.log(`Nodo ${node.id} no está activo.`);
       }
   }
 }
@@ -185,41 +190,59 @@ function declareLeader() {
     leaderStatus = true;
     console.log(`Nodo ${IDNode} se declara como líder.`);
 
+    socket.emit("newLeader", IDNode);
+
     NODES.forEach(async (node) => {
-        if (node.id !== IDNode) {
-            try{
-                const response=  await fetch(`http://${node.address}/newLeader`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ newLeader: IDNode })  
-                })
+ 
+    try{
+        const response=  await fetch(`http://${node.ipAddress}/newLeader`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ newLeader: IDNode })  
+        })
 
-                createLog(`${response.url} - method:POST - req.body:{newLeader: ${IDNode}} status:${response.status}`)
+        createLog(`${response.url} - method:POST - req.body:{newLeader: ${IDNode}} status:${response.status}`)
 
-            }catch(error){
-                createLog(`URL: http://${node.address}/newLeader - method:POST - error:${error.message}`)
-            }
-        }
+    }catch(error){
+        createLog(`URL: http://${node.ipAddress}/newLeader - method:POST - error:${error.message}`)
+    }
+        
     });
 }
 
 
 const startServer = async () => {
-    try {
+    try { 
       console.log('IP del host:', ipAddress);
       console.log('ID del contenedor:', containerName);
       console.log('HostPort:', hostPort);
       console.log("ipDIS:", disServerip);
       console.log(`Servidor corriendo en el puerto: ${containerPort}`);
+
+      const ipAddressPort= `${ipAddress}:${hostPort}`
   
-      const requestOptions = {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ipAddress: ipAddress, port: hostPort , id: containerName , IDNode:IDNode }),
-      };
-  
-     const response = await fetch(`http://${disServerip}/register`, requestOptions)
-     createLog(`${response.url} - method:POST - req.body:${requestOptions.body} status:${response.status}`)
+      socket.on("connect", async () => {
+        console.log("Conexión establecida con el servidor disServer");
+
+        // Enviar la petición de registro después de conectar con disServer
+        const requestOptions = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ipAddress: ipAddressPort, id: containerName, IDNode: IDNode }),
+        };
+
+        try {
+            const response = await fetch(`http://${disServerip}/register`, requestOptions);
+            createLog(`${response.url} - method:POST - req.body:${requestOptions.body} status:${response.status}`);
+        } catch (error) {
+            createLog(`URL: http://${disServerip}/register - method:POST - error:${error.message}`);
+        }
+    });
+
+    socket.on("connect_error", (error) => {
+        console.error("Error conectando a disServer:", error.message);
+    });
+
     } catch (error) {
         createLog(`URL: http://${disServerip}/register- method:POST - error:${error.message}`)
     }
