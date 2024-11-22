@@ -20,7 +20,7 @@ const socket = io(`http://${disServerip}`);
 const healthCheckInverval =  Math.random() * 5000 + 5000
 
 const logs=[]
-let leader = process.env.LEADER
+let leader = process.env.LEADER 
 let leaderStatus = false;
 let NODES = [];
 let inElection = false
@@ -63,14 +63,16 @@ function createLog(message){
 ioserver.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
     ioserver.emit("update", { serverProperties: serverProperties })
+
 });
+
 
 
 socket.on("updateNodes", (data) => {
     console.log("Mensaje recibido por WebSocket:", data);
     NODES = data; 
-    console.log(NODES)
-  });
+    console.log("nodes actuales:" + NODES)
+});
 
 
 // Ruta principal que devuelve el archivo HTML
@@ -81,10 +83,13 @@ app.get('/', (req, res) => {
 
 
 app.get("/healthCheck", (req, res) => {
+    createLog(`URL: ${req.url} - method:${req.method} - from:${req.ip}`)
     res.status(200).send("ok");
 });
 
 async function performHealthCheck() {
+
+    console.log(leader)
     if(inElection||leaderStatus){
         return;
     }

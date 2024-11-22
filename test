@@ -1,0 +1,2 @@
+docker build -t my-node-app . 
+    docker run --rm --name my-node-app-6732227990598-y2zyjj     -e IDNODE=1   -e LEADER=1 -e CONTAINER_NAME=my-node-app-6732227990598-y2zyjj     -e HOST_PORT=3001    -e CONTAINER_PORT=3001   -e DIS_SERVERIP_PORT=192.168.123.54:9000     -e IP_ADDRESS=192.168.123.54   -p 3001:3001 my-node-app
