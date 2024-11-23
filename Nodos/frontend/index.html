@@ -11,12 +11,12 @@
 <body>
   <div id="app">
     <h1>Servidor: {{ serverInfo }}</h1>
-
+    <h2>ID servidor {{serverProperties.idNode}}</h2>
     <p :class="['leader-status', serverProperties.leaderStatus ? 'green' : 'red']">
       {{ serverProperties.leaderStatus  ? 'Este nodo es el Jefe' : 'Este nodo no es el Jefe' }}
     </p>
     
-    <p class="healthcheck-message"> Enviando HealthChecks al lider cada: {{ (serverProperties.healthCheckInverval / 1000).toFixed(1) }} s </p>
+    <p class="healthcheck-message"> Enviando HealthChecks al lider cada: {{ (serverProperties.healthCheckInterval / 1000).toFixed(1) }} s </p>
 
     <div class="table-container">
         <table>

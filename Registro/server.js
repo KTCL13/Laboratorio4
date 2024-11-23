@@ -5,15 +5,16 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const axios = require('axios');
 const { Client } = require('ssh2');
-const { io: clientIo } = require('socket.io-client');
+
 
 // Configuración inicial
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // Permite conexiones desde cualquier origen
-    methods: ['GET', 'POST'], // Métodos permitidos
+    origin: '*', 
+    methods: ['GET', 'POST'], 
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
 });
 
@@ -25,7 +26,7 @@ const port = 9000;
 
 // Almacén de nodos
 const nodes = [];
-const nodesInformation = {}
+const nodesInformation = []
 
 // Configuración SSH
 const sshConfig = {
@@ -49,18 +50,10 @@ let portsData = { hostPort: 3000, containerPort: 3000 };
 
 // Registro de un nuevo nodo
 app.post('/register', (req, res) => {
-  const { IDnode } = req.body;
-
-  if (!IDnode) {
-    return res.status(400).send({ error: 'El campo IDnode es obligatorio.' });
-  }
-
-  if (nodes.some(n => n.IDnode === IDnode)) {
-    return res.status(409).send({ error: 'Nodo duplicado.' });
-  }
-
-  nodes.push({ IDnode });
-  console.log(`Nodo registrado: ${IDnode}`);
+  const node  = req.body;
+  console.log (node)
+  nodes.push(node);
+  console.log(`Nodo registrado: ${node.IDNode}`);
   io.emit('updateNodes', nodes); // Enviar actualización de nodos al frontend
   res.status(200).send({ message: 'Nodo registrado correctamente.' });
 });
@@ -95,10 +88,20 @@ app.post('/run-docker', (req, res) => {
     }
 
     nodes.push({ IDnode });
-    console.log(`Contenedor creado: ${result}`);
-    res.status(201).send({ message: `Contenedor creado: ${result}` });
+    console.log(`Contenedor creado: ${IDnode}`);
+    res.status(201).send({ message: `Contenedor creado: ${IDnode}` });
   });
 });
+
+app.get('/leader', (req, res) => {
+  if (leader === null) {
+    console.log('El líder aún no ha sido asignado');
+    return res.status(204).send('No leader assigned'); // 204: Sin contenido
+  }
+  console.log('Enviando líder:', leader);
+  res.status(200).send(leader);
+});
+
 
 app.get('/nodes', (req, res) => {
   console.log('Obteniendo información de los nodos.');
@@ -151,25 +154,22 @@ function runContainer(IDnode, callback) {
 
   const hostPort = portsData.hostPort;
   const containerPort = portsData.containerPort;
+  const discoveryServer = process.env.DISCOVERY_SERVER;
+  const ipAddress = process.env.SSH_HOST;
   const uniqueContainerName = `my-node-app-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const command = `
     cd ${directory} && \
     docker build -t my-node-app . && \
-    docker run --rm --name ${uniqueContainerName} \
+    docker run -d --rm --name ${uniqueContainerName} \
     -e IDNODE=${IDnode} \
     -e LEADER=${leader} \
+    -e DIS_SERVERIP_PORT=${discoveryServer} \
+    -e IP_ADDRESS=${ipAddress} \
     -e CONTAINER_NAME=${uniqueContainerName} \
     -e HOST_PORT=${hostPort} \
     -e CONTAINER_PORT=${containerPort} \
     -p ${hostPort}:${containerPort} my-node-app
   `;
-
-
-
-//docker run --rm --name node3 -e IDNODE=3 -e LEADER=1 -e CONTAINER_NAME="node3" -e HOST_PORT=3002 -e CONTAINER_PORT=3002 -e DIS_SERVERIP_PORT="192.168.1.7:9000" -e IP_ADDRESS="192.168.1.7" -p 3002:3002 my-node-app;
-
-
-
   executeSSHCommand(command, callback);
 }
 
@@ -205,56 +205,34 @@ function executeSSHCommand(command, callback) {
 
 io.on('connection', (socket) => {
   console.log('Nueva conexión WebSocket establecida.');
+  io.emit('update',nodesInformation)
 
   // Actualización de información de nodos
   socket.on('update', (serverProperties) => {
     const { idNode, healthCheckInterval, logs, leaderStatus } = serverProperties;
-
-    // Encuentra el nodo correspondiente en nodes
-    const node = nodes.find(n => n.IDNode === idNode);
-
+    const node = nodesInformation.find(n => n.idNode === idNode);
     if (node) {
-      // Actualiza el nodo con la información recibida
-      Object.assign(node, {
-        healthCheckInterval,
-        logs,
-        leaderStatus,
-        status: 'active', // Establece un estado por defecto al recibir actualización
-      });
+       node.logs=logs
+       node.leaderStatus=leaderStatus
     } else {
-      console.warn(`Nodo con IDNode ${idNode} no encontrado en nodes.`);
+      nodesInformation.push({ idNode, healthCheckInterval, logs, leaderStatus })
     }
+    io.emit('update',nodesInformation)
+  });
+
+  socket.on('election', (idElection) => {
+    io.emit('election',idElection)
   });
 
   socket.on('newLeader', (data) => {
     console.log(`Nuevo líder: ${data}`);
     leader = data;
-
-    // Actualiza el estado de líder en todos los nodos
-    nodes.forEach(node => {
-      node.leaderStatus = node.IDNode === leader;
-    });
   });
 
   socket.on('disconnect', () => {
     console.log('Conexión WebSocket cerrada.');
   });
 });
-
-// --- Emisión periódica de nodos unificados ---
-setInterval(() => {
-  const enrichedNodes = nodes.map(node => ({
-    idNode: node.IDNode,
-    ipAddress: node.ipAddress,
-    id: node.id,
-    healthCheckInterval: node.healthCheckInterval || 0,
-    logs: node.logs || [],
-    leaderStatus: node.leaderStatus || false,
-    status: node.status || 'unknown',
-  }));
-
-  io.emit('update', enrichedNodes);
-}, 1000);
 
 
 // --- Inicializar servidor ---

@@ -8,7 +8,8 @@ createApp({
   data() {
     return {
         serverProperties:{
-          healthCheckInverval: 0,
+          idNode: 0,
+          healthCheckInterval: 0,
           logs:[],
           leaderStatus: false
         },
@@ -21,7 +22,7 @@ createApp({
     // Recibir datos de WebSocket en tiempo real
     socket.on("update", (data) => {
       console.log("Mensaje recibido por WebSocket:", data);
-      this.serverProperties = data.serverProperties;
+      this.serverProperties = data;
       console.log(this.serverProperties)
       console.log("nuevas propiedades:", this.serverProperties)
     });

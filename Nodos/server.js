@@ -17,16 +17,17 @@ const containerName = process.env.CONTAINER_NAME;
 const disServerip= process.env.DIS_SERVERIP_PORT || "localhost:9000"
 const IDNode = process.env.IDNODE || 1;
 const socket = io(`http://${disServerip}`);
-const healthCheckInverval =  Math.random() * 5000 + 5000
+const healthCheckInterval =  Math.random() * 5000 + 5000
 
 const logs=[]
-let leader = process.env.LEADER 
+let leader = 0;
 let leaderStatus = false;
 let NODES = [];
 let inElection = false
 
 const serverProperties= {
-    healthCheckInverval: healthCheckInverval,
+    idNode:IDNode,
+    healthCheckInterval: healthCheckInterval,
     logs : logs,
     get leaderStatus() { return leaderStatus; }
 }
@@ -57,12 +58,13 @@ function createLog(message){
     const log = formatDate() +" "+ message
     console.log(log)
     logs.push(log)
-    ioserver.emit("update", { serverProperties: serverProperties })
+    ioserver.emit("update", serverProperties )
+    socket.emit("update", serverProperties);
 }
 
 ioserver.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
-    ioserver.emit("update", { serverProperties: serverProperties })
+    ioserver.emit("update",serverProperties )
 
 });
 
@@ -71,7 +73,6 @@ ioserver.on("connection", (socket) => {
 socket.on("updateNodes", (data) => {
     console.log("Mensaje recibido por WebSocket:", data);
     NODES = data; 
-    console.log("nodes actuales:" + NODES)
 });
 
 
@@ -83,13 +84,10 @@ app.get('/', (req, res) => {
 
 
 app.get("/healthCheck", (req, res) => {
-    createLog(`URL: ${req.url} - method:${req.method} - from:${req.ip}`)
     res.status(200).send("ok");
 });
 
 async function performHealthCheck() {
-
-    console.log(leader)
     if(inElection||leaderStatus){
         return;
     }
@@ -114,6 +112,7 @@ async function performHealthCheck() {
         if (!response.ok) throw new Error("Líder no responde");
     } catch (error) {
         createLog(`URL: http://${leaderNode.ipAddress}/healthCheck - method:GET - error:${error.message}`)
+        socket.emit("election", IDNode);
         startElection();
     }
 }
@@ -166,9 +165,6 @@ async function startElection() {
             createLog(`URL: http://${node.ipAddress}/election - method:POST - error:${error.message}`)
           }
       }
-
-      // Esperar tiempo adicional para respuestas
-      await new Promise(resolve => setTimeout(resolve, 8000));
 
       if (resolvedResponses === 0) {
           declareLeader();
@@ -234,6 +230,16 @@ const startServer = async () => {
         try {
             const response = await fetch(`http://${disServerip}/register`, requestOptions);
             createLog(`${response.url} - method:POST - req.body:${requestOptions.body} status:${response.status}`);
+            const response2 = await fetch(`http://${disServerip}/leader`)
+            createLog(response2.status)
+            if (response2.status === 204) {
+                createLog("no llego lider")
+                declareLeader()
+            }else{
+                const leaderText = await response2.text(); 
+                createLog("llego lider: " + leaderText);
+                leader = leaderText;
+            }
         } catch (error) {
             createLog(`URL: http://${disServerip}/register - method:POST - error:${error.message}`);
         }
@@ -251,5 +257,5 @@ const startServer = async () => {
 
 
 server.listen(containerPort, startServer);
-setInterval(performHealthCheck, healthCheckInverval); 
+setInterval(performHealthCheck, healthCheckInterval); 
   

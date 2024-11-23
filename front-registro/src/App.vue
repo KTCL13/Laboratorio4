@@ -23,19 +23,25 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div
           v-for="node in nodes"
-          :key="node.IDnode"
+          :key="node.idNode"
           class="bg-white shadow-md rounded-lg p-4 border"
         >
           <!-- Header de la tarjeta -->
           <div class="flex justify-between items-center mb-2">
             <h2 class="text-lg font-bold">
-              Nodo ID: <span class="text-blue-500">{{ node.IDnode }}</span>
+              Nodo ID: <span class="text-blue-500">{{ node.idNode }}</span>
             </h2>
             <span
               class="px-2 py-1 text-xs font-semibold rounded"
-              :class="node.isLeader ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
+              :class="node.leaderStatus ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
             >
-              {{ node.isLeader ? 'Líder' : 'Miembro' }}
+              {{ node.leaderStatus ? 'Líder' : 'Miembro' }}
+            </span>
+            <span
+              class="px-2 py-1 text-xs font-semibold rounded"
+              :class="node.leaderStatus ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
+            >
+              {{ node.idNode == electionNode ? 'election' : '' }}
             </span>
           </div>
 
@@ -46,20 +52,17 @@
               {{ node.status }}
             </span>
           </p>
-          <p class="text-sm text-gray-600 mb-4">
-            Tiempo activo: {{ node.uptime || 'N/A' }}
-          </p>
 
           <!-- Logs -->
           <div>
             <h3 class="text-sm font-semibold mb-1">Logs:</h3>
             <div class="bg-gray-100 p-2 rounded max-h-32 overflow-y-auto">
               <p
-                v-for="log in node.logs"
-                :key="log.timestamp"
+               v-for="(log, index) in node.logs"
+              :key="index"
                 class="text-xs text-gray-800"
               >
-                [{{ log.timestamp }}] {{ log.message }}
+              *[{{ log }}]*
               </p>  
             </div>
           </div>
@@ -83,36 +86,23 @@
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
+const ipAddress = "http://localhost:9000"
 export default {
   data() {
     return {
       nodes: [],
       newNodeId: '',
+      electionNode: 0,
       socket: null,
     };
   },
   methods: {
-    async fetchNodes() {
-      try {
-        console.log("Obteniendo informacion de los nodos manualmente.")
-        const response = await axios.get('http://localhost:9000/nodes');
-        this.nodes = response.data.nodes.map((node) => ({
-          ...node,
-          isLeader: false,
-          status: 'up', // Default status
-          logs: [], // Logs iniciales
-        }));
-        console.log(`Informacion recibida: ${this.nodes}`)
-      } catch (error) {
-        console.error('Error al obtener nodos:', error);
-      }
-    },
     async createNode() {
       if (!this.newNodeId.trim()) return;
 
       try {
         console.log(`Creando nodo con id ${this.newNodeId}`)
-        await axios.post('http://localhost:9000/run-docker', {
+        await axios.post(`${ipAddress}/run-docker`, {
           IDnode: this.newNodeId,
         });
         this.fetchNodes();
@@ -125,24 +115,24 @@ export default {
     async deleteNode() {
       try {
         console.log("Parando un nodo al azar")
-        await axios.get(`http://localhost:9000/stop-random-container`);
+        await axios.get(`${ipAddress}/stop-container`);
         this.fetchNodes();
       } catch (error) {
         console.error('Error al parar nodo:', error);
       }
     },
-    setupWebSocket() {
-      console.log("WebSockets para updateNodes iniciado")
-      this.socket = io('http://localhost:9000');
-      this.socket.on('updateNodes', (nodes) => {
-        console.log(`Informacion de updateNodes recibida: ${nodes}`)
-        this.nodes = nodes;
-      });
-    },
   },
   mounted() {
-    this.fetchNodes();
-    this.setupWebSocket();
+    const socket = io(ipAddress); 
+
+    socket.on("update", (data) => {
+    console.log("Mensaje recibido por WebSocket:", data);
+    this.nodes = data;
+    });
+
+    socket.on("election", (data) => {
+    this.electionNode=data
+    });
   },
 };
 </script>
