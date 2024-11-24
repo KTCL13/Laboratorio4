@@ -23,7 +23,7 @@ const logs=[]
 let leader = 0;
 let leaderStatus = false;
 let NODES = [];
-let inElection = false
+let inElection = true
 
 const serverProperties= {
     idNode:IDNode,
@@ -119,7 +119,6 @@ async function performHealthCheck() {
 
 app.post('/election', (req, res) => {
     createLog(`URL: ${req.url} - method:${req.method} - payload:${JSON.stringify(req.body)}`)
-    const { from } = req.body;
     startElection();
     res.status(200).send("Election response");
 });
@@ -187,23 +186,28 @@ function declareLeader() {
     console.log(`Nodo ${IDNode} se declara como líder.`);
 
     socket.emit("newLeader", IDNode);
+    socket.emit("update", serverProperties);
+
+
+    console.log(NODES)
 
     NODES.forEach(async (node) => {
- 
-    try{
-        const response=  await fetch(`http://${node.ipAddress}/newLeader`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ newLeader: IDNode })  
-        })
 
-        createLog(`${response.url} - method:POST - req.body:{newLeader: ${IDNode}} status:${response.status}`)
-
-    }catch(error){
-        createLog(`URL: http://${node.ipAddress}/newLeader - method:POST - error:${error.message}`)
-    }
-        
-    });
+        if(node.IDNode !== IDNode){
+            try{
+                const response=  await fetch(`http://${node.ipAddress}/newLeader`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ newLeader: IDNode })  
+                })
+    
+                createLog(`${response.url} - method:POST - req.body:{newLeader: ${IDNode}} status:${response.status}`)
+    
+            }catch(error){
+                createLog(`URL: http://${node.ipAddress}/newLeader - method:POST - error:${error.message}`)
+            }
+        }           
+        });
 }
 
 
@@ -226,18 +230,15 @@ const startServer = async () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ipAddress: ipAddressPort, id: containerName, IDNode: IDNode }),
         };
-
+        console,log(requestOptions.body)
         try {
             const response = await fetch(`http://${disServerip}/register`, requestOptions);
             createLog(`${response.url} - method:POST - req.body:${requestOptions.body} status:${response.status}`);
             const response2 = await fetch(`http://${disServerip}/leader`)
-            createLog(response2.status)
             if (response2.status === 204) {
-                createLog("no llego lider")
                 declareLeader()
             }else{
                 const leaderText = await response2.text(); 
-                createLog("llego lider: " + leaderText);
                 leader = leaderText;
             }
         } catch (error) {
@@ -252,6 +253,7 @@ const startServer = async () => {
     } catch (error) {
         createLog(`URL: http://${disServerip}/register- method:POST - error:${error.message}`)
     }
+    inElection=false
 };
 
 

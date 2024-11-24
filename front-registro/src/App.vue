@@ -39,7 +39,7 @@
             </span>
             <span
               class="px-2 py-1 text-xs font-semibold rounded"
-              :class="node.leaderStatus ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
+              :class="node.idNode == electionNode ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
             >
               {{ node.idNode == electionNode ? 'election' : '' }}
             </span>
@@ -70,7 +70,7 @@
           <!-- Botón de eliminar -->
           <div class="mt-4 text-right">
             <button
-              @click="deleteNode()"
+              @click="deleteNode(node.idNode)"
               class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
             >
               Eliminar Nodo
@@ -103,26 +103,25 @@ export default {
       try {
         console.log(`Creando nodo con id ${this.newNodeId}`)
         await axios.post(`${ipAddress}/run-docker`, {
-          IDnode: this.newNodeId,
+          IDnode: this.newNodeId
         });
-        this.fetchNodes();
         this.newNodeId = '';
         console.log("Nodo creado")
       } catch (error) {
         console.error('Error al crear nodo:', error);
       }
     },
-    async deleteNode() {
+    async deleteNode(idNode) {
       try {
-        console.log("Parando un nodo al azar")
-        await axios.get(`${ipAddress}/stop-container`);
-        this.fetchNodes();
-      } catch (error) {
+        console.log("Parando el nodo:", idNode)
+        await axios.post(`${ipAddress}/stop-container`, {IDnode: idNode});
+        } catch (error) {
         console.error('Error al parar nodo:', error);
       }
     },
   },
   mounted() {
+    this.electionNode = 0
     const socket = io(ipAddress); 
 
     socket.on("update", (data) => {

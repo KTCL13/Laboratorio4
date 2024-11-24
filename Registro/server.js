@@ -54,7 +54,8 @@ app.post('/register', (req, res) => {
   console.log (node)
   nodes.push(node);
   console.log(`Nodo registrado: ${node.IDNode}`);
-  io.emit('updateNodes', nodes); // Enviar actualización de nodos al frontend
+  console.log(nodes)
+  io.emit('updateNodes', nodes); 
   res.status(200).send({ message: 'Nodo registrado correctamente.' });
 });
 
@@ -86,8 +87,6 @@ app.post('/run-docker', (req, res) => {
       console.error('Error al crear contenedor:', err.message);
       return res.status(500).send({ error: `Error: ${err.message}` });
     }
-
-    nodes.push({ IDnode });
     console.log(`Contenedor creado: ${IDnode}`);
     res.status(201).send({ message: `Contenedor creado: ${IDnode}` });
   });
@@ -205,6 +204,7 @@ function executeSSHCommand(command, callback) {
 
 io.on('connection', (socket) => {
   console.log('Nueva conexión WebSocket establecida.');
+  
   io.emit('update',nodesInformation)
 
   // Actualización de información de nodos
@@ -214,8 +214,9 @@ io.on('connection', (socket) => {
     if (node) {
        node.logs=logs
        node.leaderStatus=leaderStatus
+       node.status= "up"  
     } else {
-      nodesInformation.push({ idNode, healthCheckInterval, logs, leaderStatus })
+      nodesInformation.push({ idNode, healthCheckInterval, logs, leaderStatus, socketId: socket.id , status:"up"})
     }
     io.emit('update',nodesInformation)
   });
@@ -231,6 +232,12 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Conexión WebSocket cerrada.');
+    console.log(socket.id)
+    const disconnectedNode = nodesInformation.find(n => n.socketId === socket.id);
+    if (disconnectedNode) {
+      disconnectedNode.status = "down"
+      disconnectedNode.leaderStatus=false
+    }  
   });
 });
 
