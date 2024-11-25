@@ -90,10 +90,6 @@ socket.on("updateNodes", (data) => {
 
 
 
-socket.on("inelection", (data) => {
-    inElection=true
-});
-
 
 // Ruta principal que devuelve el archivo HTML
 app.get('/', (req, res) => {
@@ -138,7 +134,9 @@ async function performHealthCheck() {
 
 app.post('/election', (req, res) => {
     createLog(0,req.url, "POST", req.method, JSON.stringify(req.body));
-    startElection();
+    if(!leaderStatus){
+        startElection();
+    }
     res.status(200).send("Election response");
 });
 
@@ -154,47 +152,49 @@ app.post('/newLeader', (req, res) => {
 });
 
 
-// Función para iniciar una elección
+
 async function startElection() {
-  inElection = true 
+    inElection = true;
+    
+    console.log(`Nodo ${IDNode} iniciando elección.`);
+    
+    const higherNodes = NODES.filter(node => Number(node.IDNode) > Number(IDNode));
   
-  socket.emit("inelection", true);
-  console.log(`Nodo ${IDNode} iniciando elección.`);
+    if (higherNodes.length === 0) {
+        declareLeader();
+    } else {
+        let unresolvedNodes = new Set(higherNodes.map(node => node.IDNode));
   
-  const higherNodes = NODES.filter(node => Number(node.IDNode) > Number(IDNode));
-
-  if (higherNodes.length === 0) {
-      declareLeader();
-  } else {
-      let resolvedResponses = 0;
-      let unresolvedNodes = new Set(higherNodes.map(node => node.IDNode));
-        createLog(JSON.stringify(1,NODES))
-        createLog(JSON.stringify(1,higherNodes))
-      for (const node of higherNodes) {
-          try {
+        const promises = higherNodes.map(async (node) => {
+            try {
                 const response = await fetch(`http://${node.ipAddress}/election`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ from: IDNode }),
-              });
-              createLog(1,response.url, "POST", `from: ${IDNode}`, response.status);
-              if (response.ok) {
-                  resolvedResponses++;
-                  unresolvedNodes.delete(node.IDNode);
-              }
-          } catch (error) {0
-            createError(1,`http://${node.ipAddress}/election`,"POST",error.message);
-          }
-      }
-
-      if (resolvedResponses === 0) {
-          declareLeader();
-      } else {
-          console.log(`Nodo ${IDNode} no se declara líder, esperando confirmación de nodos con ID más alto.`);
-      }
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ from: IDNode }),
+                });
+                createLog(1, response.url, "POST", `from: ${IDNode}`, response.status);
+  
+                if (response.ok) {
+                    unresolvedNodes.delete(node.IDNode);
+                }
+            } catch (error) {
+                createError(1, `http://${node.ipAddress}/election`, "POST", error.message);
+            }
+        });
+  
+        await Promise.all(promises);
+  
+        if (unresolvedNodes.size === higherNodes.length) {
+            declareLeader();
+        } else {
+            console.log(`Nodo ${IDNode} no se declara líder, esperando confirmación de nodos con ID más alto.`);
+        }
+    }
+    
+    inElection = false;
   }
-}
 
+// Función para iniciar una elección
 
 function declareLeader() {
     if (!IDNode) {
@@ -210,25 +210,32 @@ function declareLeader() {
     socket.emit("newLeader", IDNode);
     socket.emit("update", serverProperties);
 
+    console.log(NODES);
 
-    console.log(NODES)
 
-    NODES.forEach(async (node) => {
-
-        if(node.IDNode !== IDNode){
-            try{
-                const response=  await fetch(`http://${node.ipAddress}/newLeader`, {
+    const promises = NODES.map(async (node) => {
+        if (node.IDNode !== IDNode) {
+            try {
+                const response = await fetch(`http://${node.ipAddress}/newLeader`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ newLeader: IDNode })  
-                })
+                    body: JSON.stringify({ newLeader: IDNode }),
+                });
 
-                createLog(1,response.url, "POST", `newLeader: ${IDNode}`, response.status);
-    
-            }catch(error){
-                createError(1,`http://${node.ipAddress}/newLeader`,"POST",error.message);
+                createLog(1, response.url, "POST", `newLeader: ${IDNode}`, response.status);
+            } catch (error) {
+                createError(1, `http://${node.ipAddress}/newLeader`, "POST", error.message);
             }
-        }           
+        }
+    });
+
+
+    Promise.all(promises)
+        .then(() => {
+            console.log("Notificación de nuevo líder enviada a todos los nodos.");
+        })
+        .catch((error) => {
+            console.error("Error al notificar a algunos nodos:", error);
         });
 }
 
