@@ -16,6 +16,14 @@ createApp({
         serverInfo: ipSocket, // Información del servidor para el título
     };
   },
+  methods: {
+    getLogClass(log) {
+      if (log.error) return "log-error";
+      if (log.type === "recibido") return "log-recibido"; 
+      if (log.type === "enviado") return "log-enviado"; 
+      return ""; 
+    }
+  },
   mounted() {
     const socket = io(ipSocket); // Conexión al WebSocket
 

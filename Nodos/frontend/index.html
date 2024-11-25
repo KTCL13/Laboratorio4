@@ -26,10 +26,19 @@
               </tr>
           </thead>
           <tbody>
-              <tr v-for="(log, index) in serverProperties.logs"
-              :key="index">
-                  <td>{{log}}</td>
-              </tr>
+              <tr 
+              v-for="(log, index) in serverProperties.logs" 
+              :key="index" 
+              :class="getLogClass(log)">
+                <td>
+                  <strong>{{ log.type }}</strong> | 
+                  <span>{{ log.date }}</span> | 
+                  URL: <code>{{ log.url }}</code> | 
+                  Método: <strong>{{ log.method }}</strong> | 
+                  {{ log.payload ? `Payload: ${log.payload}` : `Error: ${log.error}` }}
+                  {{ log.status ? `status: ${log.status}` : "" }}
+                </td>
+            </tr>
           </tbody>
       </table>
       </div>

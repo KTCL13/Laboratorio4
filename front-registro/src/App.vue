@@ -31,6 +31,16 @@
             <h2 class="text-lg font-bold">
               Nodo ID: <span class="text-blue-500">{{ node.idNode }}</span>
             </h2>
+
+            <br> 
+
+            <h2 class="text-lg font-bold">
+              Dirección: 
+              <a :href="generateLink(node.ipAddress)" target="_blank" class="text-blue-500 underline">
+                {{ node.ipAddress }}
+              </a>
+            </h2>
+            
             <span
               class="px-2 py-1 text-xs font-semibold rounded"
               :class="node.leaderStatus ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
@@ -41,7 +51,7 @@
               class="px-2 py-1 text-xs font-semibold rounded"
               :class="node.idNode == electionNode ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'"
             >
-              {{ node.idNode == electionNode ? 'election' : '' }}
+              {{ node.idNode == electionNode ? 'Inició eleccion' : '' }}
             </span>
           </div>
 
@@ -97,6 +107,14 @@ export default {
     };
   },
   methods: {
+
+    generateLink(ipAddress) {
+      if (!ipAddress) {
+        return '#'; 
+      }
+      return `http://${ipAddress}`;
+    },
+
     async createNode() {
       if (!this.newNodeId.trim()) return;
 

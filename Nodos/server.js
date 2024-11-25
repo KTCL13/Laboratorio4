@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const path = require('path');
 const process = require('process');
 const { io } = require("socket.io-client"); 
+const { stat } = require('fs');
 
 
 const app = express();
@@ -27,6 +28,7 @@ let inElection = true
 
 const serverProperties= {
     idNode:IDNode,
+    ipAddress: `${ipAddress}:${hostPort}`,
     healthCheckInterval: healthCheckInterval,
     logs : logs,
     get leaderStatus() { return leaderStatus; }
@@ -54,13 +56,24 @@ function formatDate () {
   
   
 
-function createLog(message){
-    const log = formatDate() +" "+ message
+function createLog(type, url, method, payload, status ){
+    const tipo = type === 0 ? "recibido" : "enviado";
+    const log = {type:tipo, date: formatDate(), url: url , method: method , payload: payload, status: status }
     console.log(log)
     logs.push(log)
     ioserver.emit("update", serverProperties )
     socket.emit("update", serverProperties);
 }
+
+function createError(type, url, method, error ){
+    const tipo = type === 0 ? "recibido" : "enviado";
+    const log = {type:tipo, date: formatDate(), url: url , method: method , error: error}
+    console.log(log)
+    logs.push(log)
+    ioserver.emit("update", serverProperties )
+    socket.emit("update", serverProperties);
+}
+
 
 ioserver.on("connection", (socket) => {
     console.log("Usuario conectado:", socket.id);
@@ -73,6 +86,12 @@ ioserver.on("connection", (socket) => {
 socket.on("updateNodes", (data) => {
     console.log("Mensaje recibido por WebSocket:", data);
     NODES = data; 
+});
+
+
+
+socket.on("inelection", (data) => {
+    inElection=true
 });
 
 
@@ -108,23 +127,23 @@ async function performHealthCheck() {
     try {
         console.log(`Nodo ${IDNode} verificando estado del líder ${leader}.`);
         const response = await fetch(`http://${leaderNode.ipAddress}/healthCheck`);
-        createLog(`${response.url} - method:GET - req.body:{from: ${IDNode}} status:${response.status}`)
+        createLog(1,response.url, "GET", `from: ${IDNode}`, response.status);
         if (!response.ok) throw new Error("Líder no responde");
     } catch (error) {
-        createLog(`URL: http://${leaderNode.ipAddress}/healthCheck - method:GET - error:${error.message}`)
+        createError(1,`http://${leaderNode.ipAddress}/healthCheck `,"GET",error.message);
         socket.emit("election", IDNode);
         startElection();
     }
 }
 
 app.post('/election', (req, res) => {
-    createLog(`URL: ${req.url} - method:${req.method} - payload:${JSON.stringify(req.body)}`)
+    createLog(0,req.url, "POST", req.method, JSON.stringify(req.body));
     startElection();
     res.status(200).send("Election response");
 });
 
 app.post('/newLeader', (req, res) => {
-    createLog(`URL: ${req.url} - method:${req.method} - payload:${JSON.stringify(req.body)}`)
+    createLog(0,req.url, "POST", req.method, JSON.stringify(req.body));
     inElection = false
     const { newLeader } = req.body;
     leader = newLeader
@@ -137,17 +156,20 @@ app.post('/newLeader', (req, res) => {
 
 // Función para iniciar una elección
 async function startElection() {
-  inElection = true  
+  inElection = true 
+  
+  socket.emit("inelection", true);
   console.log(`Nodo ${IDNode} iniciando elección.`);
   
-  const higherNodes = NODES.filter(node => node.IDNode > IDNode);
+  const higherNodes = NODES.filter(node => Number(node.IDNode) > Number(IDNode));
 
   if (higherNodes.length === 0) {
       declareLeader();
   } else {
       let resolvedResponses = 0;
       let unresolvedNodes = new Set(higherNodes.map(node => node.IDNode));
-
+        createLog(JSON.stringify(1,NODES))
+        createLog(JSON.stringify(1,higherNodes))
       for (const node of higherNodes) {
           try {
                 const response = await fetch(`http://${node.ipAddress}/election`, {
@@ -155,13 +177,13 @@ async function startElection() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ from: IDNode }),
               });
-              createLog(`${response.url} - method:POST - req.body:{from: ${IDNode}} status:${response.status} statusText:${response.statusText}`)
+              createLog(1,response.url, "POST", `from: ${IDNode}`, response.status);
               if (response.ok) {
                   resolvedResponses++;
                   unresolvedNodes.delete(node.IDNode);
               }
           } catch (error) {0
-            createLog(`URL: http://${node.ipAddress}/election - method:POST - error:${error.message}`)
+            createError(1,`http://${node.ipAddress}/election`,"POST",error.message);
           }
       }
 
@@ -200,11 +222,11 @@ function declareLeader() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ newLeader: IDNode })  
                 })
-    
-                createLog(`${response.url} - method:POST - req.body:{newLeader: ${IDNode}} status:${response.status}`)
+
+                createLog(1,response.url, "POST", `newLeader: ${IDNode}`, response.status);
     
             }catch(error){
-                createLog(`URL: http://${node.ipAddress}/newLeader - method:POST - error:${error.message}`)
+                createError(1,`http://${node.ipAddress}/newLeader`,"POST",error.message);
             }
         }           
         });
@@ -230,19 +252,21 @@ const startServer = async () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ipAddress: ipAddressPort, id: containerName, IDNode: IDNode }),
         };
-        console,log(requestOptions.body)
+        console.log(requestOptions.body)
         try {
             const response = await fetch(`http://${disServerip}/register`, requestOptions);
-            createLog(`${response.url} - method:POST - req.body:${requestOptions.body} status:${response.status}`);
+            createLog(1,response.url, "POST", requestOptions.body, response.status);
             const response2 = await fetch(`http://${disServerip}/leader`)
             if (response2.status === 204) {
+                createLog(1,response2.url, "GET","no llego jefe", response2.status);
                 declareLeader()
             }else{
                 const leaderText = await response2.text(); 
+                createLog(1,response2.url, "GET",leaderText, response2.status);
                 leader = leaderText;
             }
         } catch (error) {
-            createLog(`URL: http://${disServerip}/register - method:POST - error:${error.message}`);
+            createError(1,`http://${disServerip}/register`,"POST",error.message);
         }
     });
 
@@ -251,7 +275,7 @@ const startServer = async () => {
     });
 
     } catch (error) {
-        createLog(`URL: http://${disServerip}/register- method:POST - error:${error.message}`)
+        createError(1,`http://${disServerip}/register`,"POST",error.message);
     }
     inElection=false
 };

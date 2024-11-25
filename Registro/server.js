@@ -209,14 +209,14 @@ io.on('connection', (socket) => {
 
   // Actualización de información de nodos
   socket.on('update', (serverProperties) => {
-    const { idNode, healthCheckInterval, logs, leaderStatus } = serverProperties;
+    const { idNode, ipAddress, healthCheckInterval, logs, leaderStatus } = serverProperties;
     const node = nodesInformation.find(n => n.idNode === idNode);
     if (node) {
        node.logs=logs
        node.leaderStatus=leaderStatus
        node.status= "up"  
     } else {
-      nodesInformation.push({ idNode, healthCheckInterval, logs, leaderStatus, socketId: socket.id , status:"up"})
+      nodesInformation.push({ idNode, ipAddress ,healthCheckInterval, logs, leaderStatus, socketId: socket.id , status:"up"})
     }
     io.emit('update',nodesInformation)
   });
@@ -224,6 +224,11 @@ io.on('connection', (socket) => {
   socket.on('election', (idElection) => {
     io.emit('election',idElection)
   });
+
+  socket.on('inelection', (data) => {
+    io.emit('inelection',true)
+  });
+  
 
   socket.on('newLeader', (data) => {
     console.log(`Nuevo líder: ${data}`);
@@ -238,6 +243,7 @@ io.on('connection', (socket) => {
       disconnectedNode.status = "down"
       disconnectedNode.leaderStatus=false
     }  
+    io.emit('update',nodesInformation)
   });
 });
 
